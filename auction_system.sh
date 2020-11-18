@@ -38,14 +38,17 @@ do
     fi
     let "cyc=(cyc+1)%$1"
     read key <&3
-    
+    # TODO: deal with fifo_0
+
 done 
 
-# After all combinations are hosted, send an ending message to all hosts forked.
+for i in $(seq 1 $1); do
+    echo "-1 -1 -1 -1 -1 -1 -1 -1" >> fifo_${i}.tmp
+done
 
-# Print the final scores ordered by player id (ascending) to stdout.
+# TODO: Print the final scores ordered by player id (ascending) to stdout.
 
 rm *.tmp
 exec 3<&-
 
-# Wait for all forked process to exit.
+# TODO: Wait for all forked process to exit.

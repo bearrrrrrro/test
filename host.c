@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/types.h>
 
 #define ERR_EXIT(m) \
      do { \
@@ -35,7 +36,7 @@ int score[MAX_PLAYER];
 void rankPlayers() {
     int rank[MAX_PLAYER];
     int i, k, cur_rank, cnt = 1;
-    for (k = 8; k > 0; k--) {
+    for (k = 8; k >= 0; k--) {
         cur_rank = cnt;
         for (i = 0; i < MAX_PLAYER; i++) {
             if (score[i] == k) {
@@ -46,6 +47,7 @@ void rankPlayers() {
     }
     for (i = 0; i < MAX_PLAYER; i++) {
         if (score[i] != -1) {
+            fprintf(stderr, "test: %d %d\n", i, rank[i]);
             printf("%d %d\n", i, rank[i]); // player{x}_id, player{x}_rank
         }
     }
@@ -57,7 +59,6 @@ int main(int argc, char **argv) {
     
     if (argc != 4) {
         fprintf(stderr, "usage: %s [host_id] [key] [depth]\n", argv[0]);
-        // fprintf(stderr, "%d %s\n", argc, argv[1]);
         exit(1);
     }
 
@@ -69,16 +70,45 @@ int main(int argc, char **argv) {
     depth = atoi(argv[3]);
     int i;
 
+    // fprintf(stderr, "ppid = %d, pid = %d, depth = %d\n", getppid(), getpid(), depth);
+
     // fork & pipe & fifo
 
     int fd[4][2];
     for (i = 0; i < 4; i++) {
         pipe(fd[i]);
     }
+    
+    if (depth < tree_height) {
+        for (i = 0; i < 2; i++) {
+            // fprintf(stderr, "depth = %d\n", depth);
+            pid_t pid;
+            pid = fork();
+            // fprintf(stderr, "pid = %d\n", pid);
+            if (pid < 0) {
+                ERR_EXIT("fork()");
+            }
+            else if (pid == 0) { // child
+                // fprintf(stderr, "fork at depth = %d\n", depth);
+                dup2(fd[i][1], STDOUT_FILENO); // write to parent
+                dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
+                close(fd[i][0]);
+                close(fd[i | 2][1]);
+                argv[3][0]++;
+                char *pathName = "./host";
+                char *args[] = {pathName, argv[1], argv[2], argv[3], NULL};
+                execvp(pathName, args);
+            }
+            else { // parent
+                close(fd[i][1]);
+                close(fd[i | 2][0]);
+            }
+        }
+    }
 
-    int infd, outfd;
     if (depth == 0) {
         sprintf(buf, "fifo_%d.tmp", host_id);
+        int infd, outfd;
         infd = open(buf, O_RDONLY);
         outfd = open("fifo_0.tmp", O_WRONLY);
         if (infd < 0 || outfd < 0) {
@@ -86,32 +116,6 @@ int main(int argc, char **argv) {
         }
         dup2(infd, STDIN_FILENO); // read from fifo_{host_id}.tmp
         dup2(outfd, STDOUT_FILENO); // write to fifo_0.tmp
-    }
-    
-    if (depth < tree_height) {
-        for (i = 0; i < 2; i++) {
-            pid_t pid;
-            pid = fork();
-            if (pid < 0) {
-                ERR_EXIT("fork()");
-            }
-            else if (pid > 0) { // child
-                dup2(fd[i][1], STDOUT_FILENO); // write to parent
-                dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
-                close(fd[i][0]);
-                close(fd[i | 2][1]);
-                if (depth < 2) {
-                    argv[3][0]++;
-                    char *pathName = "./host";
-                    char *args[] = {pathName, argv[1], argv[2], argv[3], NULL};
-                    execvp(pathName, args);
-                }
-            }
-            else { // parent
-                close(fd[i][1]);
-                close(fd[i | 2][0]);
-            }
-        }
     }
 
     // bid
@@ -145,9 +149,9 @@ int main(int argc, char **argv) {
                         sprintf(buf, "depth = %d; wait()", depth);
                         ERR_EXIT(buf);
                     }
-                    else {
-                        fprintf(stderr, "wait at depth = %d; child pid = %d\n", depth, pid);
-                    }
+                    // else {
+                    //     fprintf(stderr, "wait at depth = %d; child pid = %d\n", depth, pid);
+                    // }
                 }
                 exit(0);
             } 
@@ -163,8 +167,8 @@ int main(int argc, char **argv) {
             for (int i = 0; i < 2; i++) {
                 readline(fd[i][0], readbuf);
                 sscanf(readbuf, "%d %d", &players[i], &bids[i]);
-                if (depth == tree_height)
-                    fprintf(stderr, "%d %d\n", players[i], bids[i]);
+                // if (depth == tree_height)
+                //     fprintf(stderr, "%d %d\n", players[i], bids[i]);
             }
             
             winner = (bids[0] > bids[1] ? 0 : 1);
@@ -180,7 +184,13 @@ int main(int argc, char **argv) {
         }
 
         if (depth == 0) {
+            // fprintf(stderr, "%d\n", key);
             printf("%d\n", key);
+            for (i = 0; i < MAX_PLAYER; i++) {
+                if (score[i] != -1) {
+                    fprintf(stderr, "%d %d\n", i, score[i]);
+                }
+            }
             rankPlayers();
         }
 
@@ -191,9 +201,9 @@ int main(int argc, char **argv) {
                     sprintf(buf, "leaf host; wait()");
                     ERR_EXIT(buf);
                 }
-                else {
-                    fprintf(stderr, "pid = %d\n", pid);
-                }
+                // else {
+                //     fprintf(stderr, "pid = %d\n", pid);
+                // }
             }
         }
     }
@@ -203,13 +213,13 @@ int main(int argc, char **argv) {
 
 void initPlayers(char player_id[2][32], int fd[4][2]) {
     int i;
-    fprintf(stderr, "Init player: %s %s ...\n", player_id[0], player_id[1]);
+    // fprintf(stderr, "Init player: %s %s ...\n", player_id[0], player_id[1]);
     for (i = 0; i < 2; i++) {
         pid_t pid = fork();
         if (pid < 0) {
             ERR_EXIT("fork()");
         }
-        else if (pid > 0) {
+        else if (pid == 0) {
             dup2(fd[i][1], STDOUT_FILENO); // write to parent
             dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
             close(fd[i][0]);
