@@ -40,7 +40,7 @@ while IFS= read comb
 do
     if [[ k -lt $1 ]]; then
         let k++
-        echo "$comb > fifo_${k}.tmp"
+        # echo "$comb > fifo_${k}.tmp"
         echo $comb > fifo_${k}.tmp
     else
         read key <&3
@@ -48,17 +48,37 @@ do
         until [ "${keys[u]}"==key ]; do
             let u++
         done
-        echo "u=$u"
+        # echo "u=$u"
         echo "key = $key"
         for i in $(seq 1 8); do
             read player_id rank <&3
-            echo "player_id = $player_id"
+            # echo "player_id = $player_id"
             score[$player_id]=$((${score[$player_id]}+8-$rank))
         done
         echo ${comb} > fifo_${u}.tmp
-        echo "${comb} > fifo_${u}.tmp"
+        # echo "${comb} > fifo_${u}.tmp"
     fi
 done <<< $combstr
+
+# for i in $(seq 1 $1); do
+#     read key <&3
+#     u=1
+#     until [ "${keys[u]}"==key ]; do
+#         let u++
+#     done
+#     # echo "u=$u"
+#     echo "key = $key"
+#     for i in $(seq 1 8); do
+#         read player_id rank <&3
+#         # echo "player_id = $player_id"
+#         score[$player_id]=$((${score[$player_id]}+8-$rank))
+#     done
+# done
+
+for i in $(seq 1 9); do
+    read line <&3
+    echo $line
+done
 
 for i in $(seq 1 $1); do
     echo "-1 -1 -1 -1 -1 -1 -1 -1" > fifo_${i}.tmp
