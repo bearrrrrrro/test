@@ -38,32 +38,15 @@ done;done;done;done;done;done;done;done
 
 while IFS= read comb
 do
-    if [[ k -lt $1 ]]; then
-        let k++
-        echo "$comb > fifo_${k}.tmp"
-        echo $comb > fifo_${k}.tmp
-    fi
-    read key <&3
-    u=1
-    until [ "${keys[u]}"==key ]; do
-        let u++
-    done
-    for i in $(seq 1 8); do
-        read player_id rank <&3
-        score[$player_id]=$((${score[$player_id]}+8-$rank))
-    done
-    echo ${comb} > fifo_${u}.tmp
-    echo "${comb} > fifo_${u}.tmp"
+    echo ${comb} > fifo_1.tmp
 done <<< $combstr
 
 for i in $(seq 1 $1); do
     echo "-1 -1 -1 -1 -1 -1 -1 -1" > fifo_${i}.tmp
 done
 
-# Print the final scores ordered by player id (ascending) to stdout.
-
-for i in $(seq 1 $2); do
-    echo "$i ${score[$i]}"
+while read line <&3; do
+    echo $line
 done
 
 exec 3<&-

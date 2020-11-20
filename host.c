@@ -29,10 +29,32 @@ void readline(int fd, char *str) {
     } while (c);
 }
 
-void initPlayers(int player_id[2], int fd[4][2]);
+void initPlayers(int player_id[2], int fd[4][2]) {
+    int i;
+    for (i = 0; i < 2; i++) {
+        pid_t pid = fork();
+        if (pid < 0) {
+            ERR_EXIT("fork()");
+        }
+        else if (pid == 0) {
+            dup2(fd[i][1], STDOUT_FILENO); // write to parent
+            dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
+            close(fd[i][0]);
+            close(fd[i | 2][1]);
+            char *pathName = "./player";
+            char tmpstr[32];
+            sprintf(tmpstr, "%d", player_id[i]);
+            char *args[] = {pathName, tmpstr, NULL};
+            execvp(pathName, args);
+        }
+        else {
+            close(fd[i][1]);
+            close(fd[i | 2][0]);
+        }
+    }
+}
 
 int score[MAX_PLAYER];
-
 void rankPlayers() {
     int rank[MAX_PLAYER];
     int i, k, cur_rank, cnt = 1;
@@ -61,7 +83,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s [host_id] [key] [depth]\n", argv[0]);
         exit(1);
     }
-
     const int num_of_round = 10;
     const int tree_height = 2;
 
@@ -103,13 +124,11 @@ int main(int argc, char **argv) {
     }
 
     if (depth == 0) {
-        fprintf(stderr, "888depth = %d\n", depth);
         sprintf(buf, "fifo_%d.tmp", host_id);
         int infd, outfd;
         infd = open(buf, O_RDONLY);
-        fprintf(stderr, "88depth = %d\n", depth);
-        outfd = open("fifo_0.tmp", O_WRONLY);
-        fprintf(stderr, "8depth = %d\n", depth);
+        outfd = open("fifo_0.tmp", O_RDWR);
+        // fprintf(stderr, "8depth = %d\n", depth);
         if (infd < 0 || outfd < 0) {
             ERR_EXIT("open error");
         }
@@ -121,7 +140,7 @@ int main(int argc, char **argv) {
 
     while (1) {
         memset(score, -1, sizeof(score));
-        fprintf(stderr, "depth = %d\n", depth);
+        // fprintf(stderr, "depth = %d\n", depth);
         if (depth == tree_height) {
             int player_id[2];
             scanf("%d %d", &player_id[0], &player_id[1]);
@@ -158,33 +177,33 @@ int main(int argc, char **argv) {
         int round;
         char readbuf[32];
         int players[2], bids[2], winner;
-
+        
         for (round = 0; round < num_of_round; round++) {
             for (int i = 0; i < 2; i++) {
                 readline(fd[i][0], readbuf);
                 sscanf(readbuf, "%d %d", &players[i], &bids[i]);
+                // fprintf(stderr, "d %d p %d b %d\n", depth, players[i], bids[i]);
             }
             
             winner = (bids[0] > bids[1] ? 0 : 1);
             if (depth == 0) {
+                // fprintf(stderr, "player %d wins with bid %d\n", players[winner], bids[winner]);
+                // fprintf(stderr, "player %d loses with bid %d\n", players[~winner&1], bids[~winner&1]);
                 score[players[winner]]++;
             }
             else {
                 printf("%d %d\n", players[winner], bids[winner]);
-                if (fflush(stdout) < 0) {
-                    ERR_EXIT("fflush()");
-                }
             }
         }
 
         int test_cnt = 0;
         if (depth == 0) {
+            // for (i = 0; i < MAX_PLAYER; i++) {
+            //     fprintf(stderr, "player %d has score %d\n", i, score[i]);
+            // }   
             printf("%d\n", key);
             // fprintf(stderr, "test = %d\n", test_cnt);
             rankPlayers();
-            if (fflush(stdout) < 0) {
-                ERR_EXIT("fflush()");
-            }
         }
 
         if (depth == tree_height) {
@@ -199,32 +218,10 @@ int main(int argc, char **argv) {
                 // }
             }
         }
+        if (fflush(stdout) < 0) {
+            ERR_EXIT("fflush()");
+        }
     }
-
     return 0;
 }
 
-void initPlayers(int player_id[2], int fd[4][2]) {
-    int i;
-    for (i = 0; i < 2; i++) {
-        pid_t pid = fork();
-        if (pid < 0) {
-            ERR_EXIT("fork()");
-        }
-        else if (pid == 0) {
-            dup2(fd[i][1], STDOUT_FILENO); // write to parent
-            dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
-            close(fd[i][0]);
-            close(fd[i | 2][1]);
-            char *pathName = "./player";
-            char tmpstr[32];
-            sprintf(tmpstr, "%d", player_id[i]);
-            char *args[] = {pathName, tmpstr, NULL};
-            execvp(pathName, args);
-        }
-        else {
-            close(fd[i][1]);
-            close(fd[i | 2][0]);
-        }
-    }
-}

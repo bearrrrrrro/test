@@ -42,18 +42,22 @@ do
         let k++
         echo "$comb > fifo_${k}.tmp"
         echo $comb > fifo_${k}.tmp
+    else
+        read key <&3
+        u=1
+        until [ "${keys[u]}"==key ]; do
+            let u++
+        done
+        echo "u=$u"
+        echo "key = $key"
+        for i in $(seq 1 8); do
+            read player_id rank <&3
+            echo "player_id = $player_id"
+            score[$player_id]=$((${score[$player_id]}+8-$rank))
+        done
+        echo ${comb} > fifo_${u}.tmp
+        echo "${comb} > fifo_${u}.tmp"
     fi
-    read key <&3
-    u=1
-    until [ "${keys[u]}"==key ]; do
-        let u++
-    done
-    for i in $(seq 1 8); do
-        read player_id rank <&3
-        score[$player_id]=$((${score[$player_id]}+8-$rank))
-    done
-    echo ${comb} > fifo_${u}.tmp
-    echo "${comb} > fifo_${u}.tmp"
 done <<< $combstr
 
 for i in $(seq 1 $1); do
