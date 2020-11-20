@@ -73,7 +73,7 @@ void rankPlayers(int players[8], int ret_rank[8]) {
     for (i = 0; i < MAX_PLAYER; i++) {
         if (score[i] != -1) {
             // fprintf(stderr, "test: %d %d\n", i, rank[i]);
-            printf("%d %d\n", i, rank[i]); // player{x}_id, player{x}_rank
+            // printf("%d %d\n", i, rank[i]); // player{x}_id, player{x}_rank
             players[k] = i;
             ret_rank[k] = rank[i];
             k++;
@@ -204,6 +204,7 @@ int main(int argc, char **argv) {
             }
             else {
                 printf("%d %d\n", players[winner], bids[winner]);
+                fflush(stdout);
             }
         }
 
@@ -215,8 +216,8 @@ int main(int argc, char **argv) {
             sprintf(buf, "%d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n",
             key, players[0], ranks[0], players[1], ranks[1], players[2], ranks[2], players[3], ranks[3],
              players[4], ranks[4], players[5], ranks[5], players[6], ranks[6], players[7], ranks[7]);
-            fprintf(stderr, "%s", buf);
-            printf("%s", buf);
+            // fprintf(stderr, "%s", buf);
+            fprintf(stdout, "%s", buf);
             fflush(stdout);
         }
 
