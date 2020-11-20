@@ -7,19 +7,23 @@ export PATH
 
 keys=()
 mkfifo fifo_0.tmp
-exec 3< fifo_0.tmp
+exec 3<> fifo_0.tmp
 for i in $(seq 1 $1); do
     mkfifo fifo_${i}.tmp
     key=$RANDOM
     keys+=($key)
     # echo "./host $i $key 0"
     ./host $i $key 0 &
-    eval "exec $(($i+3))> fifo_${i}.tmp"
+    # eval "exec $(($i+3))> fifo_${i}.tmp"
 done
 
-cyc=0
+score=()
+for i in $(seq 1 $2); do
+    score[$i]=0
+done
+
 k=0
-(
+combstr=`
 for a in $(seq 1 $2); do
 for b in $(seq $(($a + 1)) $2); do
 for c in $(seq $(($b + 1)) $2); do
@@ -30,25 +34,42 @@ for g in $(seq $(($f + 1)) $2); do
 for h in $(seq $(($g + 1)) $2); do
     echo "$a $b $c $d $e $f $g $h"
 done;done;done;done;done;done;done;done
-) | while IFS= read -r line
+`
+
+while IFS= read comb
 do
     if [[ k -lt $1 ]]; then
         let k++
-        echo $line >> fifo_${cyc+1}.tmp
+        echo "$comb > fifo_${k}.tmp"
+        echo $comb > fifo_${k}.tmp
     fi
-    let "cyc=(cyc+1)%$1"
     read key <&3
     # TODO: deal with fifo_0
-
-done 
+    u=0
+    until [ "${keys[u]}"==key ]; do
+        let u++
+    done
+    echo ${comb} > fifo_${u+1}.tmp
+    for i in $(seq 1 8); do
+        read player_id rank <&3
+        score[$player_id]=$((${score[$player_id]}+8-$rank))
+    done
+done <<< $combstr
 
 for i in $(seq 1 $1); do
-    echo "-1 -1 -1 -1 -1 -1 -1 -1" >> fifo_${i}.tmp
+    echo "-1 -1 -1 -1 -1 -1 -1 -1" > fifo_${i}.tmp
 done
 
-# TODO: Print the final scores ordered by player id (ascending) to stdout.
+# Print the final scores ordered by player id (ascending) to stdout.
+
+for i in $(seq 1 $2); do
+    echo "$i ${score[$i]}"
+done
 
 rm *.tmp
 exec 3<&-
 
-# TODO: Wait for all forked process to exit.
+# Wait for all forked process to exit.
+# echo "waiting ..."
+wait
+# echo "Done!"

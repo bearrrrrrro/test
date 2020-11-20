@@ -47,7 +47,7 @@ void rankPlayers() {
     }
     for (i = 0; i < MAX_PLAYER; i++) {
         if (score[i] != -1) {
-            fprintf(stderr, "test: %d %d\n", i, rank[i]);
+            // fprintf(stderr, "test: %d %d\n", i, rank[i]);
             printf("%d %d\n", i, rank[i]); // player{x}_id, player{x}_rank
         }
     }
@@ -70,8 +70,6 @@ int main(int argc, char **argv) {
     depth = atoi(argv[3]);
     int i;
 
-    // fprintf(stderr, "ppid = %d, pid = %d, depth = %d\n", getppid(), getpid(), depth);
-
     // fork & pipe & fifo
 
     int fd[4][2];
@@ -81,15 +79,12 @@ int main(int argc, char **argv) {
     
     if (depth < tree_height) {
         for (i = 0; i < 2; i++) {
-            // fprintf(stderr, "depth = %d\n", depth);
             pid_t pid;
             pid = fork();
-            // fprintf(stderr, "pid = %d\n", pid);
             if (pid < 0) {
                 ERR_EXIT("fork()");
             }
             else if (pid == 0) { // child
-                // fprintf(stderr, "fork at depth = %d\n", depth);
                 dup2(fd[i][1], STDOUT_FILENO); // write to parent
                 dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
                 close(fd[i][0]);
@@ -149,9 +144,6 @@ int main(int argc, char **argv) {
                         sprintf(buf, "depth = %d; wait()", depth);
                         ERR_EXIT(buf);
                     }
-                    // else {
-                    //     fprintf(stderr, "wait at depth = %d; child pid = %d\n", depth, pid);
-                    // }
                 }
                 exit(0);
             } 
@@ -167,8 +159,6 @@ int main(int argc, char **argv) {
             for (int i = 0; i < 2; i++) {
                 readline(fd[i][0], readbuf);
                 sscanf(readbuf, "%d %d", &players[i], &bids[i]);
-                // if (depth == tree_height)
-                //     fprintf(stderr, "%d %d\n", players[i], bids[i]);
             }
             
             winner = (bids[0] > bids[1] ? 0 : 1);
@@ -184,14 +174,12 @@ int main(int argc, char **argv) {
         }
 
         if (depth == 0) {
-            // fprintf(stderr, "%d\n", key);
             printf("%d\n", key);
-            for (i = 0; i < MAX_PLAYER; i++) {
-                if (score[i] != -1) {
-                    fprintf(stderr, "%d %d\n", i, score[i]);
-                }
-            }
             rankPlayers();
+
+            if (fflush(stdout) < 0) {
+                ERR_EXIT("fflush()");
+            }
         }
 
         if (depth == tree_height) {
@@ -213,7 +201,6 @@ int main(int argc, char **argv) {
 
 void initPlayers(char player_id[2][32], int fd[4][2]) {
     int i;
-    // fprintf(stderr, "Init player: %s %s ...\n", player_id[0], player_id[1]);
     for (i = 0; i < 2; i++) {
         pid_t pid = fork();
         if (pid < 0) {
