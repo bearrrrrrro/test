@@ -29,7 +29,7 @@ void readline(int fd, char *str) {
     } while (c);
 }
 
-void initPlayers(char player_id[2][32], int fd[4][2]);
+void initPlayers(int player_id[2], int fd[4][2]);
 
 int score[MAX_PLAYER];
 
@@ -68,6 +68,7 @@ int main(int argc, char **argv) {
     host_id = atoi(argv[1]);
     key = atoi(argv[2]);
     depth = atoi(argv[3]);
+    // fprintf(stderr, "START depth = %d\n", depth);
     int i;
 
     // fork & pipe & fifo
@@ -102,10 +103,13 @@ int main(int argc, char **argv) {
     }
 
     if (depth == 0) {
+        fprintf(stderr, "888depth = %d\n", depth);
         sprintf(buf, "fifo_%d.tmp", host_id);
         int infd, outfd;
         infd = open(buf, O_RDONLY);
+        fprintf(stderr, "88depth = %d\n", depth);
         outfd = open("fifo_0.tmp", O_WRONLY);
+        fprintf(stderr, "8depth = %d\n", depth);
         if (infd < 0 || outfd < 0) {
             ERR_EXIT("open error");
         }
@@ -117,27 +121,27 @@ int main(int argc, char **argv) {
 
     while (1) {
         memset(score, -1, sizeof(score));
-
+        fprintf(stderr, "depth = %d\n", depth);
         if (depth == tree_height) {
-            char player_id[2][32];
-            scanf("%s %s", player_id[0], player_id[1]);
-            if (strcmp(player_id[0], "-1") == 0) exit(0);
+            int player_id[2];
+            scanf("%d %d", &player_id[0], &player_id[1]);
+            if (player_id[0] == -1) exit(0);
             initPlayers(player_id, fd);
         }
         else {
             int num_of_players = 1 << (tree_height - depth);
-            char player_id[32];
+            int player_id;
             int j;
             for (j = 0; j < 2; j++) {
                 for (i = 0; i < num_of_players; i++) {
-                    scanf("%s", player_id);
-                    int tmp = atoi(player_id);
-                    if (depth == 0 && tmp != -1) score[tmp] = 0; // set players for root host 
-                    sprintf(buf, "%s%c", player_id, " \n"[i == num_of_players - 1]);
+                    scanf("%d", &player_id);
+                    if (depth == 0 && player_id != -1) score[player_id] = 0; // set players for root host 
+                    sprintf(buf, "%d%c", player_id, " \n"[i == num_of_players - 1]);
                     write(fd[j | 2][1], buf, strlen(buf));
                 }
             }
-            if (strcmp(player_id, "-1") == 0) {
+            // fprintf(stderr, "player_id = %d\n", player_id);
+            if (player_id == -1) {
                 for (j = 0; j < 2; j++) {
                     pid_t pid = wait(NULL);
                     if (pid < 0) {
@@ -173,10 +177,11 @@ int main(int argc, char **argv) {
             }
         }
 
+        int test_cnt = 0;
         if (depth == 0) {
             printf("%d\n", key);
+            // fprintf(stderr, "test = %d\n", test_cnt);
             rankPlayers();
-
             if (fflush(stdout) < 0) {
                 ERR_EXIT("fflush()");
             }
@@ -199,7 +204,7 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-void initPlayers(char player_id[2][32], int fd[4][2]) {
+void initPlayers(int player_id[2], int fd[4][2]) {
     int i;
     for (i = 0; i < 2; i++) {
         pid_t pid = fork();
@@ -212,7 +217,9 @@ void initPlayers(char player_id[2][32], int fd[4][2]) {
             close(fd[i][0]);
             close(fd[i | 2][1]);
             char *pathName = "./player";
-            char *args[] = {pathName, player_id[i], NULL};
+            char tmpstr[32];
+            sprintf(tmpstr, "%d", player_id[i]);
+            char *args[] = {pathName, tmpstr, NULL};
             execvp(pathName, args);
         }
         else {

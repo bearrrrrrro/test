@@ -11,10 +11,10 @@ exec 3<> fifo_0.tmp
 for i in $(seq 1 $1); do
     mkfifo fifo_${i}.tmp
     key=$RANDOM
-    keys+=($key)
+    keys[$i]=$key
     # echo "./host $i $key 0"
     ./host $i $key 0 &
-    # eval "exec $(($i+3))> fifo_${i}.tmp"
+    eval "exec $(($i+3))<> fifo_${i}.tmp"
 done
 
 score=()
@@ -44,16 +44,16 @@ do
         echo $comb > fifo_${k}.tmp
     fi
     read key <&3
-    # TODO: deal with fifo_0
-    u=0
+    u=1
     until [ "${keys[u]}"==key ]; do
         let u++
     done
-    echo ${comb} > fifo_${u+1}.tmp
     for i in $(seq 1 8); do
         read player_id rank <&3
         score[$player_id]=$((${score[$player_id]}+8-$rank))
     done
+    echo ${comb} > fifo_${u}.tmp
+    echo "${comb} > fifo_${u}.tmp"
 done <<< $combstr
 
 for i in $(seq 1 $1); do
@@ -66,8 +66,8 @@ for i in $(seq 1 $2); do
     echo "$i ${score[$i]}"
 done
 
-rm *.tmp
 exec 3<&-
+rm *.tmp
 
 # Wait for all forked process to exit.
 # echo "waiting ..."
