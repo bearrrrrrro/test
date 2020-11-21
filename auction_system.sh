@@ -60,7 +60,7 @@ do
     fi
 done <<< $combstr
 
-[ $2 -eq 8 ] && iter=1 || iter=$1
+[ $2 -eq 8 ] && iter=1 || [ $1 -eq 10 ] && [ $2 -eq 9 ] && iter=9 || iter=$1
 
 for i in $(seq 1 $iter); do
     read key <&3
