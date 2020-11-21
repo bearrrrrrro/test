@@ -60,7 +60,9 @@ do
     fi
 done <<< $combstr
 
-for i in $(seq 1 $1); do
+[ $2 -eq 8 ] && iter=1 || iter=$1
+
+for i in $(seq 1 $iter); do
     read key <&3
     u=1
     until [ "${keys[u]}"==key ]; do
