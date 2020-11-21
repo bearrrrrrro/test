@@ -12,227 +12,217 @@
         exit(EXIT_FAILURE); \
     }  while( 0)
 
-#define MAX_PLAYER 15
-char buf[BUFSIZ];
+int pipe_fd[4][2];
+FILE *fps[4];
+int host_id, key, depth;
 
-// void readline(int fd, char *str) {
-//     int k = 0;
-//     ssize_t bytes_read;
-//     char c;
-//     do {
-//         c = 0;
-//         if ((bytes_read = read(fd, &c, 1)) < 0) {
-//             ERR_EXIT("read()");
-//         }
-//         if (c == '\n' || bytes_read == 0) c = 0;
-//         str[k++] = c;
-//     } while (c);
-// }
-
-void initPlayers(int player_id[2], int fd[4][2], FILE *fps[2][2]) {
+void init() {
     int i;
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < 4; i++) {
+        if (pipe(pipe_fd[i]) < 0) ERR_EXIT("pipe()");
+    }
+    int j;
+    for (j = 0; j < 2; j++) {
         pid_t pid = fork();
-        if (pid < 0) {
-            ERR_EXIT("fork()");
+        if (pid > 0) { // parent
+            fps[j*2 + 1] = fdopen(pipe_fd[j*2 + 1][0], "r");
+            fps[j*2 + 0] = fdopen(pipe_fd[j*2 + 0][1], "w");
+            close(pipe_fd[j*2 + 0][0]);
+            close(pipe_fd[j*2 + 1][1]);
         }
         else if (pid == 0) {
-            dup2(fd[i][1], STDOUT_FILENO); // write to parent
-            dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
-            close(fd[i][0]);
-            close(fd[i | 2][1]);
-            char *pathName = "./player";
-            char tmpstr[32];
-            sprintf(tmpstr, "%d", player_id[i]);
-            char *args[] = {pathName, tmpstr, NULL};
-            execvp(pathName, args);
+            close(pipe_fd[j*2 + 1][0]);
+            close(pipe_fd[j*2 + 0][1]);
+            dup2(pipe_fd[j*2 + 0][0], STDIN_FILENO);
+            dup2(pipe_fd[j*2 + 1][1], STDOUT_FILENO);
+            close(pipe_fd[j*2 + 0][0]);
+            close(pipe_fd[j*2 + 1][1]);
+            char shost_id[8], shost_key[16], sdepth[8];
+            sprintf(sdepth, "%d", depth+1);
+            execl("./host", "./host", shost_id, shost_key, sdepth, NULL);
         }
         else {
-            close(fd[i][1]);
-            close(fd[i | 2][0]);
-            fps[i][0] = fdopen(fd[i][0], "r"); // read from children
-            fps[i][1] = fdopen(fd[i | 2][1], "w"); // write to children
+            ERR_EXIT("fork()");
         }
     }
 }
 
-int score[MAX_PLAYER];
-void rankPlayers(int players[8], int ret_rank[8]) {
-    int rank[MAX_PLAYER];
-    int i, k, cur_rank, cnt = 1;
-    for (k = 8; k >= 0; k--) {
-        cur_rank = cnt;
-        for (i = 0; i < MAX_PLAYER; i++) {
-            if (score[i] == k) {
-                rank[i] = cur_rank;
-                cnt++;
+void root_host() {
+    int fifo_in_fd, fifo_out_fd;
+    char filename[32];
+    sprintf(filename, "fifo_%d.tmp", host_id);
+    fifo_in_fd = open(filename, O_RDONLY);
+    fifo_out_fd = open("fifo_0.tmp", O_WRONLY);
+    dup2(fifo_in_fd, STDIN_FILENO);
+    dup2(fifo_out_fd, STDOUT_FILENO);
+    close(fifo_in_fd);
+    close(fifo_out_fd);
+    while (1) {
+        int root_player_ids[8];
+        int root_bids[8];
+        int scores[8] = {0};
+        int ranks[8] = {1, 1, 1, 1, 1, 1, 1, 1};
+        int i, j;
+        for (i = 0; i < 8; i++) {
+            scanf("%d", &root_player_ids[i]);
+        }
+        for (j = 0; j < 2; j++) {
+            fprintf(fps[j*2], "%d %d %d %d\n",
+                root_player_ids[4*j+0],
+                root_player_ids[4*j+1],
+                root_player_ids[4*j+2],
+                root_player_ids[4*j+3]
+            );
+            fflush(fps[j*2]);
+        }
+        if (root_player_ids[0] == -1) {
+            wait(NULL);
+            wait(NULL);
+            for (i = 0; i < 4; i++) fclose(fps[i]);
+            exit(0);
+        }
+        
+        // 10 rounds
+        for (i = 0; i < 10; i++) {
+            int in_players[2], in_bids[2];
+            fscanf(fps[1], "%d %d", &in_players[0], &in_bids[0]);
+            fscanf(fps[3], "%d %d", &in_players[1], &in_bids[1]);
+
+            int winner = (in_bids[0] > in_bids[1] ? 0 : 1);
+            int win_player = in_players[winner];
+            int win_bid = in_bids[winner];
+            int win_index;
+            for (win_index = 0; win_index < 8; win_index++) {
+                if (root_player_ids[win_index] == win_player) {
+                    scores[win_index]++;
+                    break;
+                }
             }
         }
+
+        // ranking
+        for (i = 0; i < 8; i++) {
+            for (j = 0; j < 8; j++) {
+                if (scores[i] < scores[j]) ranks[i]++;
+            }
+        }
+        // result
+        printf("%d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n",
+        key, root_player_ids[0], ranks[0],
+        root_player_ids[1], ranks[1],
+        root_player_ids[2], ranks[2],
+        root_player_ids[3], ranks[3],
+        root_player_ids[4], ranks[4],
+        root_player_ids[5], ranks[5],
+        root_player_ids[6], ranks[6],
+        root_player_ids[7], ranks[7]
+        );
+        fflush(stdout);
     }
-    k = 0;
-    for (i = 0; i < MAX_PLAYER; i++) {
-        if (score[i] != -1) {
-            // fprintf(stderr, "test: %d %d\n", i, rank[i]);
-            // printf("%d %d\n", i, rank[i]); // player{x}_id, player{x}_rank
-            players[k] = i;
-            ret_rank[k] = rank[i];
-            k++;
+}
+
+void mid_host() {
+    while (1) {
+        int players[4];
+        scanf("%d %d %d %d", &players[0], &players[1], &players[2], &players[3]);
+        fprintf(fps[0], "%d %d\n", players[0], players[1]);
+        fflush(fps[0]);
+        fprintf(fps[2], "%d %d\n", players[2], players[3]);
+        fflush(fps[2]);
+        int i;
+        if (players[0] == -1) {
+            wait(NULL);
+            wait(NULL);
+            for (i = 0; i < 4; i++) fclose(fps[i]);
+            exit(0);
+        }
+        for (i = 0; i < 10; i++) {
+            int in_players[2], in_bids[2];
+            fscanf(fps[1], "%d %d", &in_players[0], &in_bids[0]);
+            fscanf(fps[3], "%d %d", &in_players[1], &in_bids[1]);
+            int winner = (in_bids[0] > in_bids[1] ? 0 : 1);
+            int win_player = in_players[winner];
+            int win_bid = in_bids[winner];
+            printf("%d %d\n", win_player, win_bid);
+            fflush(stdout);
         }
     }
 }
 
-int host_id, key, depth;
+void leaf_host() {
+    while (1) {
+        int player_ids[2];
+        scanf("%d %d", &player_ids[0], &player_ids[1]);
+        if (player_ids[0] == -1) exit(0); // end
+        int i;
+        for (i = 0; i < 4; i++) {
+            if (pipe(pipe_fd[i]) < 0) {
+                ERR_EXIT("pipe()");
+            }
+        }
+        int j;
+        for (j = 0; j < 2; j++) { // initialize players
+            pid_t pid = fork();
+            if (pid > 0) {
+                fps[j*2+0] = fdopen(pipe_fd[j*2+0][1], "w");
+                fps[j*2+1] = fdopen(pipe_fd[j*2+1][0], "r");
+                close(pipe_fd[j*2+0][0]);
+                close(pipe_fd[j*2+1][1]);
+            }
+            else if (pid == 0) {
+                close(pipe_fd[j*2+1][0]);
+                close(pipe_fd[j*2+0][1]);
+                dup2(pipe_fd[j*2+0][0], STDIN_FILENO);
+                dup2(pipe_fd[j*2+1][1], STDOUT_FILENO);
+                close(pipe_fd[j*2+0][0]);
+                close(pipe_fd[j*2+1][1]);
+                char tmpbuf[8];
+                sprintf(tmpbuf, "%d", player_ids[j]);
+                execl("./player", "./player", tmpbuf, NULL);
+            }
+            else {
+                ERR_EXIT("fork()");
+            }
+        }
+        for (i = 0; i < 10; i++) {
+            int in_players[2], in_bids[2];
+            fscanf(fps[1], "%d %d", &in_players[0], &in_bids[0]);
+            fscanf(fps[3], "%d %d", &in_players[1], &in_bids[1]);
+            int winner = (in_bids[0] > in_bids[1] ? 0 : 1);
+            int win_player = in_players[winner];
+            int win_bid = in_bids[winner];
+            printf("%d %d\n", win_player, win_bid);
+            fflush(stdout);
+        }
+        wait(NULL);
+        wait(NULL);
+        for (i = 0; i < 4; i++) fclose(fps[i]);
+    }
+}
+
 int main(int argc, char **argv) {
     if (argc != 4) {
         fprintf(stderr, "usage: %s [host_id] [key] [depth]\n", argv[0]);
         exit(1);
     }
-    const int num_of_round = 10;
-    const int tree_height = 2;
-
     host_id = atoi(argv[1]);
     key = atoi(argv[2]);
     depth = atoi(argv[3]);
-    // fprintf(stderr, "START depth = %d\n", depth);
-    int i;
-
-    // fork & pipe & fifo
-
-    int fd[4][2];
-    for (i = 0; i < 4; i++) {
-        pipe(fd[i]);
-    }
-    
-    FILE *fps[2][2];
-    if (depth < tree_height) {
-        for (i = 0; i < 2; i++) {
-            pid_t pid;
-            pid = fork();
-            if (pid < 0) {
-                ERR_EXIT("fork()");
-            }
-            else if (pid == 0) { // child
-                dup2(fd[i][1], STDOUT_FILENO); // write to parent
-                dup2(fd[i | 2][0], STDIN_FILENO); // read from parent
-                close(fd[i][0]);
-                close(fd[i][1]);
-                close(fd[i | 2][0]);
-                close(fd[i | 2][1]);
-                argv[3][0]++;
-                char *pathName = "./host";
-                char *args[] = {pathName, argv[1], argv[2], argv[3], NULL};
-                execvp(pathName, args);
-            }
-            else { // parent
-                close(fd[i][1]);
-                close(fd[i | 2][0]);
-                fps[i][0] = fdopen(fd[i][0], "r"); // read from children
-                fps[i][1] = fdopen(fd[i | 2][1], "w"); // write to children
-            }
-        }
-    }
-
-    if (depth == 0) {
-        sprintf(buf, "fifo_%d.tmp", host_id);
-        int infd, outfd;
-        infd = open(buf, O_RDONLY);
-        outfd = open("fifo_0.tmp", O_RDWR);
-        // fprintf(stderr, "8depth = %d\n", depth);
-        if (infd < 0 || outfd < 0) {
-            ERR_EXIT("open error");
-        }
-        dup2(infd, STDIN_FILENO); // read from fifo_{host_id}.tmp
-        dup2(outfd, STDOUT_FILENO); // write to fifo_0.tmp
-        close(infd);
-        close(outfd);
-    }
-
-    // bid
-
-    while (1) {
-        memset(score, -1, sizeof(score));
-        // fprintf(stderr, "depth = %d\n", depth);
-        if (depth == tree_height) { // leaf host
-            int player_id[2];
-            scanf("%d %d", &player_id[0], &player_id[1]);
-            if (player_id[0] == -1) exit(0);
-            initPlayers(player_id, fd, fps);
-        }
-        else {
-            int num_of_players = 1 << (tree_height - depth);
-            int player_id;
-            int j;
-            for (j = 0; j < 2; j++) {
-                for (i = 0; i < num_of_players; i++) {
-                    scanf("%d", &player_id);
-                    // fprintf(stderr, "player_id = %d\n", player_id);
-                    if (depth == 0 && player_id != -1) score[player_id] = 0; // set players for root host 
-                    fprintf(fps[j][1], "%d%c", player_id, " \n"[i == num_of_players - 1]);
-                    fflush(fps[j][1]);
-                    // write(fd[j | 2][1], buf, strlen(buf));
-                }
-            }
-            // fprintf(stderr, "player_id = %d\n", player_id);
-            if (player_id == -1) {
-                for (j = 0; j < 2; j++) {
-                    pid_t pid = wait(NULL);
-                    if (pid < 0) {
-                        sprintf(buf, "depth = %d; wait()", depth);
-                        ERR_EXIT(buf);
-                    }
-                }
-                exit(0);
-            } 
-        }
-
-        // compare bid & ranking
-
-        int round;
-        int players[2], bids[2], winner;
-        
-        for (round = 0; round < num_of_round; round++) {
-            for (int i = 0; i < 2; i++) {
-                fscanf(fps[i][0], "%d %d", &players[i], &bids[i]);
-                // fprintf(stderr, "d %d p %d b %d\n", depth, players[i], bids[i]);
-            }
-            
-            winner = (bids[0] > bids[1] ? 0 : 1);
-            if (depth == 0) { // root host
-                // fprintf(stderr, "player %d wins with bid %d\n", players[winner], bids[winner]);
-                // fprintf(stderr, "player %d loses with bid %d\n", players[~winner&1], bids[~winner&1]);
-                score[players[winner]]++;
-            }
-            else {
-                printf("%d %d\n", players[winner], bids[winner]);
-                fflush(stdout);
-            }
-        }
-
+    if (depth < 2) {
+        init();
         if (depth == 0) {
-            int players[8], ranks[8];
-            rankPlayers(players, ranks);
-            char buf[1024];
-            // fflush(stdout);
-            sprintf(buf, "%d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n%d %d\n",
-            key, players[0], ranks[0], players[1], ranks[1], players[2], ranks[2], players[3], ranks[3],
-             players[4], ranks[4], players[5], ranks[5], players[6], ranks[6], players[7], ranks[7]);
-            // fprintf(stderr, "%s", buf);
-            fprintf(stdout, "%s", buf);
-            fflush(stdout);
+            root_host();
         }
-
-        if (depth == tree_height) {
-            for (i = 0; i < 2; i++) {
-                pid_t pid = wait(NULL);
-                if (pid < 0) {
-                    sprintf(buf, "leaf host; wait()");
-                    ERR_EXIT(buf);
-                }
-            }
+        else if (depth == 1) {
+            mid_host();
         }
-        if (fflush(stdout) < 0) {
-            ERR_EXIT("fflush()");
-        }
+    }
+    else if (depth == 2) {
+        leaf_host();
+    }
+    else {
+        fprintf(stderr, "depth error: depth must be 0 or 1 or 2\n");
+        exit(1);
     }
     return 0;
 }

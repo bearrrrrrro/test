@@ -28,9 +28,9 @@ int main(int argc, char **argv) {
     for (round = 1; round <= 10; round++) {
         bid = bid_list[player_id + round - 2] * 100;
         printf("%d %d\n", player_id, bid);
-    }
-    if (fflush(stdout) < 0) {
-        ERR_EXIT("fflush()");
+        if (fflush(stdout) < 0) {
+            ERR_EXIT("fflush()");
+        }
     }
 
     return 0;
