@@ -60,8 +60,12 @@ do
     fi
 done <<< $combstr
 
-[ $2 -eq 8 ] && iter=1 || [ $1 -eq 10 ] && [ $2 -eq 9 ] && iter=9 || iter=$1
+if [ $2 -eq 8 ]; then iter=1
+elif [ $1 -eq 10 ] && [ $2 -eq 9 ]; then iter=9
+else iter=$1
+fi
 
+# echo $iter
 for i in $(seq 1 $iter); do
     read key <&3
     u=1
